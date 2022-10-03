@@ -1,0 +1,165 @@
+service: websocket-project
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  memorySize: 700
+  timeout: 300
+  runtime: python3.7
+  stackTags:
+    product: job-topic-model
+    env: qa
+    created-date: 2022-04-26
+    team: python-dev
+    customer-impact: false
+    terraform: false
+
+useDotenv: true
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    layer:
+      name: python-pynamodb
+      description: "Layer which contains PynamoDB"
+      compatibleRuntimes:
+        - python3.7
+
+package:
+  exclude:
+    - '**/*'
+    - "node_modules"
+    - "frontend"
+    - "test"
+  include:
+    - "model/*"
+    - "lambdas/*"
+
+functions:
+
+  connect_handler:
+    handler: lambdas/handler.connect_handler
+    environment:
+      DEV_AWS_ACCESS_KEY: ${env:DEV_AWS_ACCESS_KEY}
+      DEV_AWS_SECRET_KEY: ${env:DEV_AWS_SECRET_KEY}
+      DEV_AWS_REGION: ${env:DEV_AWS_REGION}
+      TABLE_NAME_ACTIVE_CONNECTION: ${env:TABLE_NAME_ACTIVE_CONNECTION}
+      TABLE_NAME_ON_CONNECT: ${env:TABLE_NAME_ON_CONNECT}
+      TABLE_NAME_ON_DISCONNECT: ${env:TABLE_NAME_ON_DISCONNECT}
+    events:
+      - websocket: $connect
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+  disconnect_handler:
+    handler: lambdas/handler.disconnect_handler
+    environment:
+      DEV_AWS_ACCESS_KEY: ${env:DEV_AWS_ACCESS_KEY}
+      DEV_AWS_SECRET_KEY: ${env:DEV_AWS_SECRET_KEY}
+      DEV_AWS_REGION: ${env:DEV_AWS_REGION}
+      TABLE_NAME_ACTIVE_CONNECTION: ${env:TABLE_NAME_ACTIVE_CONNECTION}
+      TABLE_NAME_ON_CONNECT: ${env:TABLE_NAME_ON_CONNECT}
+      TABLE_NAME_ON_DISCONNECT: ${env:TABLE_NAME_ON_DISCONNECT}
+    events:
+      - websocket: $disconnect
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+  get_live_users_handler:
+    handler: lambdas/handler.get_live_users_handler
+    environment:
+      DEV_AWS_ACCESS_KEY: ${env:DEV_AWS_ACCESS_KEY}
+      DEV_AWS_SECRET_KEY: ${env:DEV_AWS_SECRET_KEY}
+      DEV_AWS_REGION: ${env:DEV_AWS_REGION}
+      TABLE_NAME_ACTIVE_CONNECTION: ${env:TABLE_NAME_ACTIVE_CONNECTION}
+      TABLE_NAME_ON_CONNECT: ${env:TABLE_NAME_ON_CONNECT}
+      TABLE_NAME_ON_DISCONNECT: ${env:TABLE_NAME_ON_DISCONNECT}
+
+    events:
+      - websocket:
+          route: onGetLiveUsers
+          routeResponseSelectionExpression: $default
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+  get_active_users_handler:
+    handler: lambdas/handler.get_live_users_handler
+    environment:
+      DEV_AWS_ACCESS_KEY: ${env:DEV_AWS_ACCESS_KEY}
+      DEV_AWS_SECRET_KEY: ${env:DEV_AWS_SECRET_KEY}
+      DEV_AWS_REGION: ${env:DEV_AWS_REGION}
+      TABLE_NAME_ACTIVE_CONNECTION: ${env:TABLE_NAME_ACTIVE_CONNECTION}
+      TABLE_NAME_ON_CONNECT: ${env:TABLE_NAME_ON_CONNECT}
+      TABLE_NAME_ON_DISCONNECT: ${env:TABLE_NAME_ON_DISCONNECT}
+
+    events:
+      - websocket:
+          route: onGetActiveUsers
+          routeResponseSelectionExpression: $default
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+
+resources:
+  Resources:
+
+    onconnect:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_NAME_ON_CONNECT}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: false
+
+    ondisconnect:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_NAME_ON_DISCONNECT}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: false
+
+    activeconnections:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_NAME_ACTIVE_CONNECTION}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: false
